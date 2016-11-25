@@ -1,5 +1,6 @@
 import sys
 import ROOT
+ROOT.gROOT.SetBatch(True)
 import numpy
 import math
 from sklearn.ensemble import RandomForestClassifier
@@ -16,7 +17,8 @@ from MVAcommon import *
 try:
     import cv2
 except ImportError:
-    sys.path.append("../../opencv/lib/")
+    #sys.path.append("../../opencv/lib/")
+    sys.path.append("/uscms_data/d3/pastika/zinv/dev/CMSSW_7_4_8/src/opencv/lib/")
     import cv2
 import optparse
 
@@ -122,14 +124,14 @@ for event in fileValidation.slimmedTuple:
             hPurityDen.Fill(event.cand_pt[i], event.sampleWgt)
             hPurity_discDen.Fill(tmp_output[i], event.sampleWgt)
             hNConstMatchTag.Fill(event.genConstiuentMatchesVec[i])
-            for j, vname in enumerate(varsname):
-                if(histranges.has_key(vname)):
-                    hist_tag[vname].Fill(Varsval[j])
+            #for j, vname in enumerate(varsname):
+                #if(histranges.has_key(vname)):
+                    #hist_tag[vname].Fill(Varsval[j])
         else:
             hNConstMatchNoTag.Fill(event.genConstiuentMatchesVec[i])
-            for j, vname in enumerate(varsname):
-                if(histranges.has_key(vname)):
-                    hist_notag[vname].Fill(Varsval[j])
+            #for j, vname in enumerate(varsname):
+                #if(histranges.has_key(vname)):
+                    #hist_notag[vname].Fill(Varsval[j])
         passHEP = HEPReqs(event, i)
         if(passHEP):
             HEPcand +=1
@@ -139,6 +141,9 @@ for event in fileValidation.slimmedTuple:
             hNConstMatchNoTagHEP.Fill(event.genConstiuentMatchesVec[i])
         #Truth matched candidates
         if(event.genConstiuentMatchesVec[i] == 3):
+            for j, vname in enumerate(varsname):
+                if(histranges.has_key(vname)):
+                    hist_tag[vname].Fill(Varsval[j])
             for k in xrange(len(cut)):
                 discpass = (tmp_output[i]>cut[k] or tmp_output[i]==cut[k]) if(k==0) else (tmp_output[i]>cut[k])
                 if(discpass):
@@ -159,6 +164,9 @@ for event in fileValidation.slimmedTuple:
                 hDiscMatchPt.Fill(tmp_output[i], event.sampleWgt)
         #not truth matched
         else:
+            for j, vname in enumerate(varsname):
+                if(histranges.has_key(vname)):
+                    hist_notag[vname].Fill(Varsval[j])
             hDiscNoMatch.Fill(tmp_output[i], event.sampleWgt)
             if(event.cand_pt[i] > 250):
                 hDiscNoMatchPt.Fill(tmp_output[i], event.sampleWgt)
@@ -347,8 +355,8 @@ hDiscNoMatchPt.Scale(1/hDiscNoMatchPt.Integral())
 #hDisc.Draw()
 hDiscMatch.Draw()
 hDiscNoMatch.Draw("same")
-hDiscMatchPt.Draw("same")
-hDiscNoMatchPt.Draw("same")
+#hDiscMatchPt.Draw("same")
+#hDiscNoMatchPt.Draw("same")
 leg.Draw("same")
 hDiscMatch.GetYaxis().SetRangeUser(0, 1.3*max([hDiscMatch.GetMaximum(), hDiscNoMatch.GetMaximum(), hDiscMatchPt.GetMaximum(), hDiscNoMatchPt.GetMaximum()]))
 c.Print("discriminator.png")
@@ -427,8 +435,8 @@ c.Print("nConstMatched.png")
 #draw variables
 for h in hist_tag:
     leg = ROOT.TLegend(0.55, 0.75, 0.9, 0.9)
-    leg.AddEntry(hist_tag[h], h+" for top like object")
-    leg.AddEntry(hist_notag[h], h+" for not top like object")
+    leg.AddEntry(hist_tag[h], h+" for signal candidates")
+    leg.AddEntry(hist_notag[h], h+" for background candidates")
     hist_tag[h].SetStats(0)
     hist_tag[h].SetTitle(h)
     hist_tag[h].Scale(1/hist_tag[h].Integral())

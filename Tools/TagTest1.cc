@@ -25,14 +25,19 @@ int main(int argc, char* argv[]) {
   const  int startfile = std::atoi(Stratfile);
   const int filerun = std::atoi(Filerun);  
   const int maxevent = std::atoi(Maxevent);
-  TChain *fChain = 0;
   BaseHistgram myBaseHistgram;
   myBaseHistgram.BookHistgram(subsamplename, startfile);
   const string condorSpec = argc==6 ? argv[5]: "";  
+  TChain *fChain = 0;
   if(!FillChain(fChain, subsamplename, condorSpec, startfile, filerun))
     {
       std::cerr << "Cannot get the tree " << std::endl;
     }
+  
+  /*  TChain *fChain = new TChain("stopTreeMaker/AUX");
+  for(int i=1; i<4; i++){
+    fChain->Add(Form("/eos/uscms/store/user/lpcsusyhad/Stop_production/Spring16_80X_Oct_2016_Ntp_v10X_AK8_QGL/SMS-T1tttt_mGluino-1500_mLSP-100_TuneCUETP8M1_13TeV-madgraphMLM-pythia8/Spring16_80X_Oct_2016_Ntp_v10p0_AK8_QGL_SMS-T1tttt_mGluino-1500_mLSP-100/161021_184102/0000/stopFlatNtuples_%d.root",i));
+    }*/
 
   //Use BaselineVessel class for baseline variables and selections
   std::string spec = "TagTest";
@@ -56,13 +61,14 @@ int main(int argc, char* argv[]) {
   int entries = tr->getNEntries();
   std::cout<<"\nentries : "<<entries<<"\t MC Scale: "<<Lumiscale<<std::endl; 
   cout<<"maxevent: "<<maxevent<<endl;
-
+  int ev = 0;
   // Loop over the events (tree entries)
   while(tr->getNextEvent()){
     if(maxevent>=0 && tr->getEvtNum() > maxevent ) break;
     // Add print out of the progress of looping
     if( tr->getEvtNum()-1 == 0 || tr->getEvtNum() == entries || (tr->getEvtNum()-1)%(entries/10) == 0 ) std::cout<<"\n   Processing the "<<tr->getEvtNum()-1<<"th event ..."<<std::endl;
-
+    ev++;
+    //std::cout<<"Event: "<<ev<<std::endl;
     const vector<TLorentzVector> &genDecayLVec = tr->getVec<TLorentzVector>("genDecayLVec");
     const vector<int> &genDecayIdxVec = tr->getVec<int>("genDecayIdxVec");
     const vector<int> &genDecayPdgIdVec = tr->getVec<int>("genDecayPdgIdVec");
@@ -92,7 +98,7 @@ int main(int argc, char* argv[]) {
     const vector<double> &recoJetsBtag_ForTop = tr->getVec<double>("recoJetsBtag_forTagger"+spec);
     //cut    
     //if(!(passMET && passNJET && passBJET))continue;
-    if(!passNJET)continue;
+    if(!(passNJET && passMET))continue;
     vector<TLorentzVector> hadtopLVec = genUtility::GetHadTopLVec(genDecayLVec, genDecayPdgIdVec, genDecayIdxVec, genDecayMomIdxVec);
 
     std::vector<TLorentzVector> jetsLVec_forTagger;
@@ -110,7 +116,7 @@ int main(int argc, char* argv[]) {
     //Use result for top var
     vector<TopObject*> Ntop = ttr.getTops();
     vector<TopObject> NtopCand = ttr.getTopCandidates();
-
+    //std::cout<<"Ntop: "<<Ntop.size()<<" NtopCand: "<<NtopCand.size()<<std::endl;
     //matching
     bool topmatch = false;
     bool topmatchCand = false;
@@ -130,6 +136,9 @@ int main(int argc, char* argv[]) {
     vector<bool> monojetmatch(MatchNtop.size(),false);
     vector<bool> dijet2match(MatchNtop.size(),false);
     vector<bool> trijet3match(MatchNtop.size(),false);
+    vector<bool> trijet2match(MatchNtop.size(),false);
+    vector<bool> trijet1match(MatchNtop.size(),false);
+
     if(MatchNtop.size()){
       for(unsigned tc = 0; tc<MatchNtop.size(); tc++){
 	vector<Constituent const*> topconst = MatchNtop[tc].getConstituents();
@@ -143,6 +152,8 @@ int main(int argc, char* argv[]) {
 	if(topconst.size()==3){
 	  int trimatch = topcat.GetMatchedTopConst(topconst, gentopdauLVec);
 	  if(trimatch==3)trijet3match[tc] = true;
+	  if(trimatch==2)trijet2match[tc] = true;
+	  if(trimatch==1)trijet1match[tc] = true;
 	}
       }
     }
@@ -153,6 +164,7 @@ int main(int argc, char* argv[]) {
    }
  }
     pUtility::FillInt(myBaseHistgram.hNtop,Ntop.size(),Lumiscale);
+    pUtility::Fill2D(myBaseHistgram.hNjet_Ntop,double(nJets), double(Ntop.size()),Lumiscale);
     pUtility::FillInt(myBaseHistgram.hNtopCand,NtopCand.size(),Lumiscale);   
     pUtility::FillInt(myBaseHistgram.hMatchedNtop,MatchNtop.size(),Lumiscale);
      if(Ntop.size()){         
@@ -190,12 +202,42 @@ int main(int argc, char* argv[]) {
      bool fMatch = false;
       for(unsigned je = 0; je<MatchGentop.size(); je++){
 	if(hadtopLVec[ie]!=MatchGentop[je])continue;
-	if(trijet3match[je] || dijet2match[je] || monojetmatch[je]){fMatch = true; break;}
-	//fMatch = true; break;
+	if(trijet3match[je] || dijet2match[je] || monojetmatch[je]){
+	fMatch = true; break;
+	}
       }
       if(fMatch){
 	pUtility::FillDouble(myBaseHistgram.hgentopPt_num,hadtopLVec[ie].Pt(),Lumiscale);
        pUtility::FillInt(myBaseHistgram.hEffNJET_num, nJets, Lumiscale); 
+      }
+    }
+
+    //trijet2match
+    for(unsigned ie = 0; ie<hadtopLVec.size(); ie++){
+      pUtility::FillDouble(myBaseHistgram.hgentopPt_2match_den,hadtopLVec[ie].Pt(),Lumiscale);
+      bool fMatch = false;
+      for(unsigned je = 0; je<MatchGentop.size(); je++){
+        if(hadtopLVec[ie]!=MatchGentop[je])continue;
+	if(trijet2match[je]){
+	  fMatch = true; break;
+        }
+      }
+      if(fMatch){
+	pUtility::FillDouble(myBaseHistgram.hgentopPt_2match_num,hadtopLVec[ie].Pt(),Lumiscale);
+      }
+    }
+    //trijet1match
+    for(unsigned ie = 0; ie<hadtopLVec.size(); ie++){
+      pUtility::FillDouble(myBaseHistgram.hgentopPt_1match_den,hadtopLVec[ie].Pt(),Lumiscale);
+      bool fMatch = false;
+      for(unsigned je = 0; je<MatchGentop.size(); je++){
+        if(hadtopLVec[ie]!=MatchGentop[je])continue;
+	if(trijet1match[je]){
+	  fMatch = true; break;
+        }
+      }
+      if(fMatch){
+	pUtility::FillDouble(myBaseHistgram.hgentopPt_1match_num,hadtopLVec[ie].Pt(),Lumiscale);
       }
     }
     //from old tagger
@@ -208,6 +250,7 @@ int main(int argc, char* argv[]) {
       }
       if(fMatch)pUtility::FillDouble(myBaseHistgram.hgentopPt_old_num,hadtopLVec[ie].Pt(),Lumiscale);
     }
+
     //Purity
     for(unsigned ip = 0; ip<Ntop.size(); ip++){
       pUtility::FillDouble(myBaseHistgram.hrecotopPt_den,Ntop[ip]->p().Pt(),Lumiscale);  
@@ -239,6 +282,31 @@ int main(int argc, char* argv[]) {
     if(sample.Contains("ZJetsToNuNu")){
       pUtility::FillDouble(myBaseHistgram.hfakeMET_old_den, met, Lumiscale);
       if(nTopsLVec_old.size()) pUtility::FillDouble(myBaseHistgram.hfakeMET_old_num, met, Lumiscale);
+    }
+
+    //Intrinsic Ineff
+    for(unsigned ie = 0; ie<hadtopLVec.size(); ie++){
+      pUtility::FillDouble(myBaseHistgram.hgentopPt_Ineff_den,hadtopLVec[ie].Pt(),Lumiscale);
+      vector<TLorentzVector>genhadtopdauLVec = genUtility::GetTopdauLVec(hadtopLVec[ie], genDecayLVec, genDecayPdgIdVec, genDecayIdxVec, genDecayMomIdxVec);
+      double DeltaR = 0.4;
+      int Ineff = 0;
+      for(unsigned id = 0; id<genhadtopdauLVec.size(); id++){
+	bool match = false;
+	double deltaRMin = 100000.;
+	unsigned tid = -1;
+	for(unsigned ij = 0; ij<jetsLVec.size(); ij++){
+	  const double dr = genhadtopdauLVec[id].DeltaR(jetsLVec.at(ij));
+	  if( dr < deltaRMin ){ 
+	    deltaRMin = dr;
+	    tid = ij;
+	  }
+	}
+	if(deltaRMin < DeltaR) {
+	  match = true;
+	  if(jetsLVec[tid].Pt()<30) Ineff++;
+	}
+      }
+      if(Ineff)pUtility::FillDouble(myBaseHistgram.hgentopPt_Ineff_num,hadtopLVec[ie].Pt(),Lumiscale);
     }
 
  }//event loop
