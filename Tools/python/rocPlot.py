@@ -43,6 +43,7 @@ def main():
     
     p.jsonFile = options.jsonFile
     
+    # make sure the json file lists do not have commas after the last items (if so, json.load(f) will fail)
     with open(p.jsonFile, "r") as f:
         p.inputs = json.load(f)
 
